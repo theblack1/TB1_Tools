@@ -1,4 +1,5 @@
 from matplotlib import cm
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
@@ -9,7 +10,6 @@ import time
 from threading import Thread
 # color map信息请见：https://zhuanlan.zhihu.com/p/114420786
 
-DEFAULT_PLT_COLORMAP = cm.magma
 DEFAULT_CV_COLORMAP = cv2.COLORMAP_PLASMA
 COLORS=list(mcolors.TABLEAU_COLORS.keys()) # cur_color = mcolors.TABLEAU_COLORS[COLORS[idx]]
 
@@ -19,23 +19,23 @@ class TB1Img():
         return
     
     # 生成保存路径
-    def get_save_dir(self, file_name, path = "./figs/TB1ImgTool_default_save", driver = 'png', _time_labled = True):
+    def get_save_path(self, file_name, dir = "./output/TB1ImgTool_default_save", driver = 'png', _use_time_label = True):
         import os
         import time
         
         # 递归创建文件夹
-        if not os.path.exists(path):
-            os.makedirs(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
         
         # 是否使用时间标签来保证每一次保存都有不同名称
         time_string = ''
-        if _time_labled:
-            time_string = time.strftime("%Y-%m-%d_%Hh-%Mm-%Ss",time.localtime(time.time()))
+        if _use_time_label:
+            time_string = time.strftime("%Y-%m-%d_%Hh-%Mm-%Ss",time.localtime(time.time())) + '_'
         
         # 生成文件名
-        file_save_name = path + '/' + time_string + '_' + file_name + '.' + driver
+        file_save_path = dir + '/' + time_string  + file_name + '.' + driver
         
-        return file_save_name
+        return file_save_path
     
     # 使用opencv展示图像
     def show_in_cv(self, img_array, win_name = 'img',save_name = '', _stretch = False, _hist_enhance = False, _fake_color = DEFAULT_CV_COLORMAP,
@@ -47,30 +47,13 @@ class TB1Img():
     # 对多组一维数据绘制分图
     # mode_arr 表征分图排序，还有叠图次数（按照顺序）,
     # 如mode_arr = array[[0,0],[1,2]]表示两行两列的图，且第二行第一列的图叠1次，第二行第二列叠2次
-    def draw_ts(self, data_dict, mode_arr, _isSave = True,  _isShow = True, **kwargs):
-        fig = plt.figure(figsize=(12,6))
+    def draw_ts(self, data_dict, mode_arr, _isSave = True,  _isShow = True, 
+                figsize = (14,7), file_name = "ts_fig", dir = "./output/TB1ImgTool_default_save", alpha = 0.5,
+                **kwargs):
+        
+        fig = plt.figure(figsize=figsize)
         # 标准化
         mode_arr = np.array(mode_arr)
-        
-        # 是否有标题
-        if "title" in kwargs.keys():
-            fig.title = kwargs["title"]
-            file_name = kwargs["title"]
-        else:
-            file_name = "ts_fig"
-            
-        # 是否有路径
-        if "path" in kwargs.keys():
-            path = kwargs["path"]
-        else:
-            path = "./figs/TB1ImgTool_default_save"
-        
-        # 是否有透明度数据
-        if "alpha" in kwargs.keys():
-            alpha = kwargs["alpha"]
-        else:
-            alpha = 0.5
-        
         key_arr = np.array(list(data_dict.keys()))
         
         # 解析mode_arr
@@ -103,10 +86,10 @@ class TB1Img():
                 
                 # 绘图
                 ax.grid()
-                line,  = ax.plot(t_arr, ts_arr, color = data_color)
+                line,  = ax.plot(t_arr, ts_arr, color = data_color, label = data_name)
                 ax.set_title(data_name)
                 
-                ax.legend((line),[data_name])
+                ax.legend()
             else:
                 # 叠图
                 ax = fig.add_subplot(NRow, NCol, fig_idx + 1)
@@ -138,13 +121,12 @@ class TB1Img():
                     data_name_list.append(data_name)
                     
                     ax.set_title(sub_title)
-            
-            ax.legend(tuple(line_list), data_name_list)
-            ax.autoscale(enable=True, axis="x", tight=True)
+                ax.legend(tuple(line_list), data_name_list, ncol=len(data_name_list), loc="upper right")
+            # ax.autoscale(enable=True, axis="x", tight=True)
         
         plt.tight_layout()
         if _isSave:
-            plt.savefig(self.get_save_dir(file_name=file_name, path = path))
+            plt.savefig(self.get_save_path(file_name=file_name, dir = dir))
         
         if _isShow:
             plt.show()
@@ -158,8 +140,35 @@ class TB1Img():
         
         return cur_color
     
+    # !添加color bar
+    def add_color_bar(self, fig, cmp_name, c_data,
+                    Ncolors = 255, center = None, **kwargs):
+        # 设置颜色条
+        cmp = cm.get_cmap(cmp_name)
+        
+        min_ = np.min(c_data)
+        max_ = np.max(c_data)
+        
+        if center:
+            down_interval = (center - min_)/(Ncolors/2)
+            norm_arr = np.arange(min_,center, down_interval)
+            up_interval = (max_ - center)/(Ncolors/2)
+            norm_arr = np.append(norm_arr,(np.arange(up_interval,max_,up_interval)))
+            
+        else:
+            interval = (max_ - min_)/Ncolors
+            norm_arr = np.arange(min_,max_,interval)
+        
+        norm_list = list(norm_arr)   
+        norm = mpl.colors.BoundaryNorm(norm_list, cmp.N)
+        
+        
+        colorbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmp), **kwargs)
+        
+        return colorbar, norm
+    
     # 矩阵转热力图
-    def mat_to_heatmap(self, input_mat, file_name = "", cmap=DEFAULT_PLT_COLORMAP):
+    def mat_to_heatmap(self, input_mat, file_name = "", cmp_name="magma", _show_num = False, center = None, label_row = None, label_col = None,**kwargs):
         import numpy as np
         import pandas as pd
         import matplotlib.pyplot as plt
@@ -167,14 +176,29 @@ class TB1Img():
         import seaborn as sns
 
         #　生成标签
-        label = ["{}".format(i) for i in range(1, input_mat.shape[0]+1)]
-        df = pd.DataFrame(input_mat, index=label, columns=label)
+        if not label_row:
+            label_row = ["{}".format(i) for i in range(1, input_mat.shape[0]+1)]
+        if not label_col:
+            label_col = ["{}".format(i) for i in range(1, input_mat.shape[1]+1)]
+        
+        # 翻转纵坐标
+        label_row.reverse()
+        
+        
+            
+        df = pd.DataFrame(np.flip(input_mat,axis=0), index=label_row, columns=label_col)
 
         # 绘制热力图
         plt.figure(figsize=(7.5, 6.3))
-        ax = sns.heatmap(df, xticklabels=df.corr().columns, 
-                        yticklabels=df.corr().columns, cmap=cmap,
-                        linewidths=6, annot=True)
+        if _show_num:
+            ax = sns.heatmap(df, 
+                            xticklabels=label_col, 
+                            yticklabels=label_row, cmap=cm.get_cmap(cmp_name),center = center,
+                            linewidths=6, annot=True, **kwargs)
+        else:
+            ax = sns.heatmap(df, 
+                            xticklabels=label_col, 
+                            yticklabels=label_row, cmap=cm.get_cmap(cmp_name),center = center, **kwargs)
 
         # 设置坐标系
         plt.xticks(fontsize=16,family='Times New Roman')
@@ -182,8 +206,8 @@ class TB1Img():
 
         # 保存文件
         if len(file_name):
-            save_dir = self.get_save_dir(file_name = file_name)
-            plt.savefig(save_dir)
+            save_path = self.get_save_path(file_name = file_name)
+            plt.savefig(save_path)
         
         # 展示热力图
         plt.tight_layout()
@@ -191,7 +215,7 @@ class TB1Img():
     
     # 矩阵转3D图
     # 参考代码https://blog.csdn.net/qq_40811682/article/details/117027899
-    def mat_to_3D(self, input_mat, img_type, file_name = "", cmap=DEFAULT_PLT_COLORMAP):
+    def mat_to_3D(self, input_mat, img_type, file_name = "", cmp_name="magma"):
         from mpl_toolkits.mplot3d import Axes3D
         import matplotlib.pyplot as plt
         from matplotlib.ticker import LinearLocator, FormatStrFormatter
@@ -210,10 +234,10 @@ class TB1Img():
         # 绘制表面
         if img_type == "surface":
             # 表面图Surface plots
-            surf = ax.plot_surface(X, Y, Z, cmap=cmap,
+            surf = ax.plot_surface(X, Y, Z, cmap=cm.get_cmap(cmp_name),
                                 linewidth=0, antialiased=False)
         elif img_type == "tri-surface":
-            surf = ax.plot_trisurf(np.array(X).flatten(), np.array(Y).flatten(), Z.flatten(), cmap = cmap)
+            surf = ax.plot_trisurf(np.array(X).flatten(), np.array(Y).flatten(), Z.flatten(), cmap = cm.get_cmap(cmp_name))
             
         
         # 定制化坐标系
@@ -224,41 +248,66 @@ class TB1Img():
         # 添加颜色条
         fig.colorbar(surf, shrink=0.5, aspect=5)
         
+        fig.tight_layout()
         # 保存文件
         if len(file_name):
-            save_dir = self.get_save_dir(file_name = file_name)
-            plt.savefig(save_dir)
+            save_path = self.get_save_path(file_name = file_name)
+            plt.savefig(save_path)
         
         # 显示图像
         plt.show()
-    
-    # # 落点热力图
-    # def drop_heatmap(self, x_arr, y_arr, map_size, mode = "times"):
-    #     import numpy.matlib as nm
-    #     from theblack1_time_series import TB1TimeSeries
-    #     TS_TOOL = TB1TimeSeries()
-    #     # 初始化
-    #     Nx = map_size[0]
-    #     Ny = map_size[1]
-    #     drop_mat = nm.empty((Ny, Nx))
         
-    #     # 生成查找方格位置
-    #     x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
-    #     y_interval = (np.max(y_arr) - np.min(y_arr))/Ny
-    #     # 进入x batch
-    #     for x_batch_start in np.arange(np.min(x_arr), np.max(x_arr), x_interval):
-    #         x_batch_end = x_batch_start + x_interval
-    #         # 寻找该x batch 中符合条件的x索引
-    #         x_where_res = np.where(
-    #             np.logical_and(np.logical_or(x_arr > x_batch_start, x_arr == x_batch_start), x_arr < x_batch_end))
-    #         # 在x batch 中寻找y batch
-    #         for y_batch_start in np.arange(np.min(y_arr), np.max(y_arr), y_interval):
-    #             y_batch_end = y_batch_start + y_interval
-    #             # 寻找该x batch 中符合条件的x索引
-    #             y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
+        return fig
+    
+    # 落点热力图
+    def drop_heatmap(self, x_arr, y_arr, z_arr, map_size, mode = "mean", num_lim = 1, **kwargs):
+        import numpy.matlib as nm
+        from theblack1_time_series import TB1TimeSeries
+        TS_TOOL = TB1TimeSeries()
+        
+        # 初始化
+        Nx = map_size[0]
+        Ny = map_size[1]
+        drop_mat = nm.empty((Ny, Nx))
+        
+        # 生成查找方格位置
+        x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
+        y_interval = (np.max(y_arr) - np.min(y_arr))/Ny
+        # 进入x batch
+        for (x_idx,x_batch_start) in enumerate(np.arange(np.min(x_arr), np.max(x_arr), x_interval)):
+            x_batch_end = x_batch_start + x_interval
+            # 寻找该x batch 中符合条件的x索引
+            x_where_res = np.where(np.logical_and(np.logical_or(x_arr > x_batch_start, x_arr == x_batch_start), x_arr < x_batch_end))
+            # 在x batch 中寻找y batch
+            for (y_idx,y_batch_start) in enumerate(np.arange(np.min(y_arr), np.max(y_arr), y_interval)):
+                y_batch_end = y_batch_start + y_interval
+                # 寻找该x batch 中符合条件的x索引
+                y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
                 
-    #             # 求索引交集
-    #             xy_res = x_where_res[np.in1d(x_where_res, y_where_res)]  
+                x_where_arr = np.array(x_where_res)
+                y_where_arr = np.array(y_where_res)
+                # 求索引交集
+                z_where_arr = x_where_arr[[np.in1d(x_where_arr, y_where_arr)]]
+                
+                # 矩阵数值填充
+                if mode == "mean":
+                    z_mean = 0
+                    for z_idx in z_where_arr:
+                        z_mean += z_arr[z_idx]/len(z_where_arr)
+                        
+                    drop_mat[y_idx, x_idx] = z_mean
+                elif mode == "times":
+                    drop_mat[y_idx, x_idx] = len(z_where_arr)
+                
+                # 个数限制
+                if len(z_where_arr) < num_lim:
+                    drop_mat[y_idx, x_idx] = 0
+        
+        # 制作标签
+        label_col = [f"{i:.2f}" for i in np.arange(np.min(x_arr), np.max(x_arr), x_interval)]
+        label_row = [f"{i:.2f}" for i in np.arange(np.min(y_arr), np.max(y_arr), y_interval)]
+        
+        self.mat_to_heatmap(drop_mat, label_col = label_col, label_row = label_row, **kwargs)
                 
     # 二维数组化一维数组处理并还原
     # #(部分与二维无关的数据处理（如缠绕），可以这样处理来提高运算速度)
@@ -416,13 +465,13 @@ class _TB1CvImshow():
                 img_array_fix_toSave = np.copy(img_array)
                 cv2.normalize(np.copy(img_array.astype(np.uint8)),img_array_fix_toSave,0,255,cv2.NORM_MINMAX)
                 # self.save_result(self.save_name + "_origin", img_array_fix_toSave)
-                self.save_result(self.save_name + "(enhanced)", img_array_fix_enhance)
+                self.save_img(self.save_name + "(enhanced)", img_array_fix_enhance)
         else:
             self.g_image_original = img_array_fix
             if len(self.save_name):
                 img_array_fix_toSave = np.copy(img_array)
                 cv2.normalize(np.copy(img_array.astype(np.uint8)),img_array_fix_toSave,0,255,cv2.NORM_MINMAX)
-                self.save_result(self.save_name, img_array_fix_toSave)
+                self.save_img(self.save_name, img_array_fix_toSave)
         
         self.g_image_zoom = self.g_image_original.copy()  # 缩放后的图片
         self.g_image_show = self.g_image_original[self.g_location_win[1]:self.g_location_win[1] + self.g_window_wh[1], self.g_location_win[0]:self.g_location_win[0] + self.g_window_wh[0]]  # 实际显示的图片
@@ -471,17 +520,17 @@ class _TB1CvImshow():
         return dst
         
     # 保存内容
-    def save_result(self, file_name, img, driver = 'jpg'):
-        path = "./data/imshow_save"
+    def save_img(self, img_name, img, driver = 'jpg'):
+        dir = "./output/TB1Imshow_default_save"
         # 递归创建文件夹
-        if not os.path.exists(path):
-            os.makedirs(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
         
         time_string = time.strftime("%Y-%m-%d_%Hh-%Mm-%Ss",time.localtime(time.time()))
-        file_save_name = path + '/' + time_string + '_' + file_name + '.' + driver
-        # file_save_name = path + '/' + file_name + '.' + driver
+        file_save_path = dir + '/' + time_string + '_' + img_name + '.' + driver
+        # file_save_path = dir + '/' + file_name + '.' + driver
         
-        cv2.imwrite(file_save_name, img)
+        cv2.imwrite(file_save_path, img)
     
     # 线程
     def thread(self,func,*args):#fun是一个函数  args是一组参数对象

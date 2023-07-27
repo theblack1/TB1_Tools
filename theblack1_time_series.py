@@ -12,15 +12,15 @@ class TB1TimeSeries:
         return
     
     # 保存时间序列
-    def save_ts_file(self, data_dict, data_name, path = r"./output/TB1TSTool_default_save", split_word = "\t", _No_subtitle = False):
+    def save_ts_file(self, data_dict, data_name, dir = r"./output/TB1TSTool_default_save", split_word = "\t", _No_subtitle = False):
         # 递归创建文件夹
-        if not os.path.exists(path):
-            os.makedirs(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
         
         key_arr = np.array(list(data_dict.keys()))
         NData = len(data_dict[key_arr[0]])
         
-        with open(path + "/" + data_name + ".txt", "w") as write_file:
+        with open(dir + "/" + data_name + ".txt", "w") as write_file:
             # 写标题
             if not _No_subtitle:
                 title = key_arr[0]
@@ -37,18 +37,60 @@ class TB1TimeSeries:
                 write_file.write(line + "\n")
             
         
-        print("成功保存为：" + path + "/" + data_name + ".txt")
+        print("成功保存为：" + dir + "/" + data_name + ".txt")
+    
+    # 快速保存时间序列
+    def quick_save_ts(self, t_arr, val_arr, data_name, dir = r"./output/TB1TSTool_default_save", split_word = "\t"):
+        # 递归创建文件夹
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        
+        with open(dir + "/" + data_name + ".txt", "w") as write_file:
+            # 逐行写内容
+            for t, val in zip(t_arr, val_arr):
+                line = str(t) + split_word + str(val)
+                write_file.write(line + "\n")
+            
+        
+        print("成功保存为：" + dir + "/" + data_name + ".txt")
+    
+    # 快速读取时间序列
+    def quick_read_ts(self, ts_file_path, split_str = ""):
+        with open(ts_file_path, "r") as str_file:
+            # 读取第一行
+            line = str_file.readline()
+            
+            t_arr = np.array([])
+            val_arr = np.array([])
+            # 逐行读取
+            while line:
+                # 是否分割
+                if split_str:
+                    line_data = line.split(split_str)
+                    line_data = np.array(line_data)
+                else:
+                    line_data = line.split()
+                    line_data = np.array(line_data)
+                    
+                t_arr = np.append(t_arr, line_data[0])
+                val_arr = np.append(val_arr, line_data[1])
+                
+                # 读下一行
+                line = str_file.readline() # 读取下一行
+        
+        return t_arr, val_arr
     
     # 峰值检测
-    def find_peak(self, t_arr, val_arr, mode = 1, **kwargs):
+    def find_peak(self, t_arr, val_arr, mode = 1, 
+                  peak_lim = None, **kwargs):
         from scipy.signal import argrelextrema
         
         # 是否过滤数据
-        if "peak_lim" in kwargs.keys():
+        if peak_lim:
             if mode == 1:
-                val_lim = [kwargs["peak_lim"], np.max(val_arr) + 1]
+                val_lim = [peak_lim, np.max(val_arr) + 1]
             elif mode == 0:
-                val_lim = [np.min(val_arr) - 1, kwargs["peak_lim"]]
+                val_lim = [np.min(val_arr) - 1, peak_lim]
         else:
             val_lim = [np.min(val_arr) - 1, np.max(val_arr) + 1]
         
@@ -64,7 +106,9 @@ class TB1TimeSeries:
         
         return peak_t_arr, peak_arr
     
-    # 标准化1
+    # def normalize(self, val_arr, **kwargs):
+        
+    # 标准化-最大最小化 
     def min_max_normalize(self, val_arr, min_ = 0, max_ = 0):
         val_max = np.max(val_arr)
         val_min = np.min(val_arr)
@@ -78,7 +122,7 @@ class TB1TimeSeries:
         
         return normalize_val_arr
 
-    # 标准化2
+    # 标准化-按照均值极限
     def avg_lim_normalize(self, val_arr, avg_, lim_list):
         min_ = lim_list[0]
         max_ = lim_list[1]
@@ -179,7 +223,9 @@ class TB1TimeSeries:
     
     # 傅里叶变换
     # _get_origin 意思是是否要绘制或者保存原图,True表示同意
-    def fft_func(self, Fs, val_arr, data_name="" , _isSave = False, _isShow = False, _get_origin = True,  _isDemean = False, _example = False, **kwargs):
+    def fft_func(self, Fs, val_arr, _isSave = False, _isShow = False, data_name="",
+                _get_origin = True,  _isDemean = False, x_lim = None,
+                _example = False, **kwargs):
         # 展示案例
         if _example == True:
             Fs = 10000
@@ -228,25 +274,22 @@ class TB1TimeSeries:
             plt.grid()
             
             if _isSave:
-                if "path" in kwargs.keys():
-                    plt.savefig(img_tool.get_save_dir(file_name=data_name + "_time_series", path = kwargs["path"]))
-                else:
-                    plt.savefig(img_tool.get_save_dir(file_name=data_name))
+                plt.savefig(img_tool.get_save_path(file_name=data_name + "_time_series", **kwargs))
 
         plt.figure()
         plt.title(data_name + " fft result")
         plt.plot(fre_arr, abs(fft_arr))
         # plt.autoscale(enable=True, axis="both", tight=True)
-        if "x_lim" in kwargs.keys():
-            plt.xlim(kwargs["x_lim"][0], kwargs["x_lim"][1])
+        if x_lim:
+            plt.xlim(x_lim[0], x_lim[1])
         plt.grid()
         
         # 是否保存
         if _isSave:
-            if "path" in kwargs.keys():
-                plt.savefig(img_tool.get_save_dir(file_name=data_name + "_fft_result", path = kwargs["path"]))
+            if "dir" in kwargs.keys():
+                plt.savefig(img_tool.get_save_path(file_name=data_name + "_fft_result", **kwargs))
             else:
-                plt.savefig(img_tool.get_save_dir(file_name=data_name + "_fft_result"))
+                plt.savefig(img_tool.get_save_path(file_name=data_name + "_fft_result"))
         
         # 是否显示结果
         if _isShow:
@@ -301,26 +344,40 @@ class TB1TimeSeries:
         return t_gap_arr
     
     # 时间序列重采样
-    def resample(self, t_arr, val_arr, resample_rate):
-        # 插值范围
-        start_t = t_arr[0]
-        end_t = t_arr[-1]
-        # 插值数量
-        Nt = math.floor((end_t-start_t)/resample_rate)
+    def resample(self, t_arr, val_arr, resample_rate,
+                t_lim = None, **kwargs):
+        if t_lim:
+            start_t = np.min(t_lim)
+            end_t = math.floor((np.max(t_lim) - start_t)/resample_rate)*resample_rate + start_t
+        else:
+            # 插值范围
+            start_t = t_arr[0]
+            end_t = math.floor((t_arr[-1] - start_t)/resample_rate)*resample_rate + start_t
+            
+        #　将结束时间纠正到原序列最大值内
+        while end_t > np.max(t_arr):
+            end_t -= resample_rate
+            
         # 重采样后时间列表
-        resample_t_arr = np.linspace(start_t, end_t, Nt)
-        
+        resample_t_arr = np.array([])
         # 开始重采样
-        resample_val_arr = np.zeros_like(resample_t_arr)
-        for idx in range(len(resample_t_arr)):
-            cur_t = resample_t_arr[idx]
+        resample_val_arr = np.array([])
+        cur_t = start_t
+        
+        while cur_t <= end_t:
+            resample_t_arr = np.append(resample_t_arr, cur_t)
+            
             # 情况1：+-百分之一采样率里有值，对值取平均
             up_lim = cur_t + resample_rate/100
             down_lim = cur_t - resample_rate/100
             where_res1 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
             if len(where_res1[0]):
                 val_res1 = val_arr[where_res1]
-                resample_val_arr[idx] = np.average(val_res1)
+                resample_val = np.average(val_res1)
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+                
+                # 向下迭代
+                cur_t += resample_rate
                 continue
             # 情况2：+-1/2采样率里有值，取加权平均
             up_lim = cur_t + resample_rate/2
@@ -328,7 +385,11 @@ class TB1TimeSeries:
             where_res2 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
             if len(where_res2[0]):
                 val_res2 = val_arr[where_res2]
-                resample_val_arr[idx] = np.average(val_res2, weights=tuple(abs((t_arr[where_res2]-cur_t))))
+                resample_val = np.average(val_res2, weights=tuple(abs((t_arr[where_res2]-cur_t))))
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+                
+                # 向下迭代
+                cur_t += resample_rate
                 continue
             # 情况3：超过+-1/2采样率里有值，取最近的前后两点的加权平均
             search_arr = t_arr - cur_t
@@ -340,7 +401,11 @@ class TB1TimeSeries:
             down_near_val = val_arr[down_near_t_idx]
             up_near_val = val_arr[up_near_t_idx]
             
-            resample_val_arr[idx] = np.average(np.array([down_near_val, up_near_val]), weights=tuple(abs(np.array([down_near_t, up_near_t])-cur_t)))
+            resample_val = np.average(np.array([down_near_val, up_near_val]), weights=tuple(abs(np.array([down_near_t, up_near_t])-cur_t)))
+            resample_val_arr = np.append(resample_val_arr, resample_val)
+            
+            # 向下迭代
+            cur_t += resample_rate
             
         return resample_t_arr, resample_val_arr
         
@@ -356,14 +421,14 @@ class TB1TimeSeries:
             cliped_t_arr, cliped_val_arr = self.clip_by_t(t_arr, val_arr, t_lim)
             
             # 计算和记录
-            res = core_func(cliped_val_arr)
+            res = core_func(cliped_t_arr, cliped_val_arr)
             res_list.append(res)
             
             res_t = np.average(cliped_t_arr)
             res_t_list.append(res_t)
 
 
-        res_arr = np.array(res_list)
+        res_val_arr = np.array(res_list)
         res_t_arr = np.array(res_t_list)
         
-        return res_t_arr, res_arr
+        return res_t_arr, res_val_arr

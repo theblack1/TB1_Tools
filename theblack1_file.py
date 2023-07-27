@@ -6,11 +6,11 @@ class TB1Flie():
     def __init__(self):
         return
     
-    # 递归创建文件夹
-    def create_file(self, path):
+    # 递归创建文件夹路径
+    def create_file(self, dir):
         # 递归创建文件夹
-        if not os.path.exists(path):
-            os.makedirs(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
     
     # 检测文件编码格式
     def check_charset(self, str_file_path):
@@ -26,7 +26,8 @@ class TB1Flie():
     # 按行读取类txt文件并返回array
     # "split_str"指定分割字符串
     # "start_idx"指定开始行
-    def read_by_line(self, str_file_path, split_str = "", start_idx = 1, _read_in_lists = False):
+    # "_read_by_cols"表示读取结果按照每个列保存为数组
+    def read_by_line(self, str_file_path, split_str = "", start_idx = 1, _read_by_cols = False):
         file_list = []
         __is_read_start = False
         with open(str_file_path, "r" ,encoding=self.check_charset(str_file_path)) as str_file:
@@ -34,7 +35,7 @@ class TB1Flie():
             line = str_file.readline()
             line_idx = 1
             #　如果逐行读取，初始化数组
-            if _read_in_lists and split_str:
+            if _read_by_cols and split_str:
                 if split_str == -1:
                     line_data_0 = line.split()
                     NCol = len(line_data_0)
@@ -58,7 +59,7 @@ class TB1Flie():
                     else:
                         line_data = line
                     # 写入数据
-                    if _read_in_lists and split_str:
+                    if _read_by_cols and split_str:
                         for col_idx in range(NCol):
                             file_list[col_idx].append(line_data[col_idx])
                     else:
@@ -74,5 +75,4 @@ class TB1Flie():
         
         file_arr = np.array(file_list)
         return file_arr
-    
     
