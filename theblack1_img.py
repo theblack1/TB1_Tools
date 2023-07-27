@@ -48,7 +48,7 @@ class TB1Img():
     # mode_arr 表征分图排序，还有叠图次数（按照顺序）,
     # 如mode_arr = array[[0,0],[1,2]]表示两行两列的图，且第二行第一列的图叠1次，第二行第二列叠2次
     def draw_ts(self, data_dict, mode_arr, _isSave = True,  _isShow = True, **kwargs):
-        fig = plt.figure(figsize=(14,7))
+        fig = plt.figure(figsize=(12,6))
         # 标准化
         mode_arr = np.array(mode_arr)
         
@@ -232,33 +232,34 @@ class TB1Img():
         # 显示图像
         plt.show()
     
-    # 落点热力图
-    def drop_heatmap(self, x_arr, y_arr, map_size, mode = "times"):
-        import numpy.matlib as nm
-        from theblack1_time_series import TB1TimeSeries
-        TS_TOOL = TB1TimeSeries()
-        # 初始化
-        Nx = map_size[0]
-        Ny = map_size[1]
-        drop_mat = nm.empty((Ny, Nx))
+    # # 落点热力图
+    # def drop_heatmap(self, x_arr, y_arr, map_size, mode = "times"):
+    #     import numpy.matlib as nm
+    #     from theblack1_time_series import TB1TimeSeries
+    #     TS_TOOL = TB1TimeSeries()
+    #     # 初始化
+    #     Nx = map_size[0]
+    #     Ny = map_size[1]
+    #     drop_mat = nm.empty((Ny, Nx))
         
-        # 生成查找方格位置
-        x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
-        y_interval = (np.max(y_arr) - np.min(y_arr))/Ny
-        # 进入x batch
-        for x_batch_start in np.arange(np.min(x_arr), np.max(x_arr), x_interval):
-            x_batch_end = x_batch_start + x_interval
-            # 寻找该x batch 中符合条件的x索引
-            x_where_res = np.where(
-                np.logical_and(np.logical_or(x_arr > x_batch_start, x_arr == x_batch_start), x_arr < x_batch_end))
-            # 在x batch 中寻找y batch
-            for y_batch_start in np.arange(np.min(y_arr), np.max(y_arr), y_interval):
-                y_batch_end = y_batch_start + y_interval
-                # 寻找该x batch 中符合条件的x索引
-                y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
+    #     # 生成查找方格位置
+    #     x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
+    #     y_interval = (np.max(y_arr) - np.min(y_arr))/Ny
+    #     # 进入x batch
+    #     for x_batch_start in np.arange(np.min(x_arr), np.max(x_arr), x_interval):
+    #         x_batch_end = x_batch_start + x_interval
+    #         # 寻找该x batch 中符合条件的x索引
+    #         x_where_res = np.where(
+    #             np.logical_and(np.logical_or(x_arr > x_batch_start, x_arr == x_batch_start), x_arr < x_batch_end))
+    #         # 在x batch 中寻找y batch
+    #         for y_batch_start in np.arange(np.min(y_arr), np.max(y_arr), y_interval):
+    #             y_batch_end = y_batch_start + y_interval
+    #             # 寻找该x batch 中符合条件的x索引
+    #             y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
                 
-                # 求索引交集
-                xy_res = x_where_res[np.in1d(x_where_res, y_where_res)]  
+    #             # 求索引交集
+    #             xy_res = x_where_res[np.in1d(x_where_res, y_where_res)]  
+                
     # 二维数组化一维数组处理并还原
     # #(部分与二维无关的数据处理（如缠绕），可以这样处理来提高运算速度)
     def flatten_process(self, func, input_data, **param):
