@@ -86,7 +86,7 @@ class TB1TimeSeries:
         from scipy.signal import argrelextrema
         
         # 是否过滤数据
-        if peak_lim:
+        if peak_lim or peak_lim == 0:
             if mode == 1:
                 val_lim = [peak_lim, np.max(val_arr) + 1]
             elif mode == 0:
@@ -102,18 +102,16 @@ class TB1TimeSeries:
             peak_arr = val_arr[argrelextrema(val_arr, np.less)]
         
         # 取范围
-        peak_t_arr, peak_arr = self.clip_by_val(t_arr=peak_t_arr, val_arr=peak_arr, val_lim=val_lim)
+        peak_t_arr, peak_arr = self.clip_by_val(peak_t_arr, peak_arr, val_lim=val_lim)
         
         return peak_t_arr, peak_arr
-    
-    # def normalize(self, val_arr, **kwargs):
-        
+
     # 标准化-最大最小化 
     def min_max_normalize(self, val_arr, min_ = 0, max_ = 0):
         val_max = np.max(val_arr)
         val_min = np.min(val_arr)
         
-        # 计算0~1之间的数值
+        # 计算将数值化为0~1之间
         normalize_val_arr = (val_arr-val_min)/(val_max-val_min)
         
         # 是否有给定最大最小值
@@ -407,6 +405,111 @@ class TB1TimeSeries:
             # 向下迭代
             cur_t += resample_rate
             
+        return resample_t_arr, resample_val_arr
+    
+    # 时间序列重采样
+    def resample_by_ref(self, t_arr, val_arr, ref_t_arr, resample_rate = None,**kwargs):
+        # 如果没有提供采样率，则估计采样率
+        if not resample_rate:
+            t_gap_list = []
+            ref_t_before = ref_t_arr[0]
+            for ref_t_after in ref_t_arr[1:]:
+                t_gap = abs(ref_t_after - ref_t_before)
+                t_gap_list.append(t_gap)
+            
+            resample_rate = min(t_gap_list)
+        
+        # 序列范围纠正
+        # 最小值纠正
+        where_min = np.where(ref_t_arr > np.min(t_arr))
+        start_t = np.min(ref_t_arr[where_min])
+        # 最大值纠正
+        where_max = np.where(ref_t_arr < np.max(t_arr))
+        end_t = np.max(ref_t_arr[where_max])
+            
+        # 重采样后时间列表
+        resample_t_arr = ref_t_arr
+        # 开始重采样
+        resample_val_arr = np.array([])
+        t_iter = iter(resample_t_arr)
+        cur_t = next(t_iter)
+        # 校正到开始
+        if cur_t < start_t:
+            cur_t = next(t_iter)
+        
+        while cur_t < end_t:
+            # 情况1：+-百分之一采样率里有值，对值取平均
+            up_lim = cur_t + resample_rate/100
+            down_lim = cur_t - resample_rate/100
+            where_res1 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
+            if len(where_res1[0]):
+                val_res1 = val_arr[where_res1]
+                resample_val = np.average(val_res1)
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+                
+                # 向下迭代
+                cur_t = next(t_iter)
+                continue
+            # 情况2：+-1/2采样率里有值，取加权平均
+            up_lim = cur_t + resample_rate/2
+            down_lim = cur_t - resample_rate/2
+            where_res2 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
+            if len(where_res2[0]):
+                val_res2 = val_arr[where_res2]
+                resample_val = np.average(val_res2, weights=tuple(abs((t_arr[where_res2]-cur_t))))
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+                
+                # 向下迭代
+                cur_t = next(t_iter)
+                continue
+            # 情况3：超过+-1/2采样率里有值，取最近的前后两点的加权平均
+            search_arr = t_arr - cur_t
+            # 求小最近
+            down_near_t_idx = np.argmin(abs(search_arr[np.where(search_arr<0)]))
+            up_near_t_idx = len(search_arr[np.where(search_arr<0)]) + np.argmin(abs(search_arr[np.where(search_arr>0)]))
+            down_near_t = t_arr[down_near_t_idx]
+            up_near_t = t_arr[up_near_t_idx]
+            down_near_val = val_arr[down_near_t_idx]
+            up_near_val = val_arr[up_near_t_idx]
+            
+            resample_val = np.average(np.array([down_near_val, up_near_val]), weights=tuple(abs(np.array([down_near_t, up_near_t])-cur_t)))
+            resample_val_arr = np.append(resample_val_arr, resample_val)
+            
+            # 向下迭代
+            cur_t = next(t_iter)
+            
+        # !最后一个t单独处理
+        # 情况1：+-百分之一采样率里有值，对值取平均
+        up_lim = cur_t + resample_rate/100
+        down_lim = cur_t - resample_rate/100
+        where_res1 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
+        if len(where_res1[0]):
+            val_res1 = val_arr[where_res1]
+            resample_val = np.average(val_res1)
+            resample_val_arr = np.append(resample_val_arr, resample_val)
+        else:
+            # 情况2：+-1/2采样率里有值，取加权平均
+            up_lim = cur_t + resample_rate/2
+            down_lim = cur_t - resample_rate/2
+            where_res2 = np.where(np.logical_and(t_arr > down_lim, t_arr < up_lim))
+            if len(where_res2[0]):
+                val_res2 = val_arr[where_res2]
+                resample_val = np.average(val_res2, weights=tuple(abs((t_arr[where_res2]-cur_t))))
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+            else:
+                # 情况3：超过+-1/2采样率里有值，取最近的前后两点的加权平均
+                search_arr = t_arr - cur_t
+                # 求小最近
+                down_near_t_idx = np.argmin(abs(search_arr[np.where(search_arr<0)]))
+                up_near_t_idx = len(search_arr[np.where(search_arr<0)]) + np.argmin(abs(search_arr[np.where(search_arr>0)]))
+                down_near_t = t_arr[down_near_t_idx]
+                up_near_t = t_arr[up_near_t_idx]
+                down_near_val = val_arr[down_near_t_idx]
+                up_near_val = val_arr[up_near_t_idx]
+                
+                resample_val = np.average(np.array([down_near_val, up_near_val]), weights=tuple(abs(np.array([down_near_t, up_near_t])-cur_t)))
+                resample_val_arr = np.append(resample_val_arr, resample_val)
+        
         return resample_t_arr, resample_val_arr
         
     # 等间隔计算

@@ -9,6 +9,7 @@ import os
 import time
 from threading import Thread
 # color map信息请见：https://zhuanlan.zhihu.com/p/114420786
+# color 信息请见：https://zhuanlan.zhihu.com/p/586935440
 
 DEFAULT_CV_COLORMAP = cv2.COLORMAP_PLASMA
 COLORS=list(mcolors.TABLEAU_COLORS.keys()) # cur_color = mcolors.TABLEAU_COLORS[COLORS[idx]]
@@ -140,9 +141,17 @@ class TB1Img():
         
         return cur_color
     
-    # !添加color bar
+    # 添加color bar
     def add_color_bar(self, fig, cmp_name, c_data,
-                    Ncolors = 255, center = None, **kwargs):
+                    Ncolors = 255, center = None, color_center = False, **kwargs):
+        
+        # 示例
+        # 设置颜色条
+        # colorbar, norm = IMG_TOOL.add_color_bar(fig, cmp_name="bwr", c_data=z_change_rate, center=0)
+        # # 散点图绘制
+        # ax.scatter(x = x_lat_dif, y=y_season_dif,
+        #         c= z_change_rate, norm=norm, cmap=cm.get_cmap("bwr") ,alpha= alpha_list)
+        
         # 设置颜色条
         cmp = cm.get_cmap(cmp_name)
         
@@ -156,8 +165,12 @@ class TB1Img():
             norm_arr = np.append(norm_arr,(np.arange(up_interval,max_,up_interval)))
             
         else:
-            interval = (max_ - min_)/Ncolors
-            norm_arr = np.arange(min_,max_,interval)
+            if color_center:
+                interval = (max_ - min_)/(Ncolors-1)
+                norm_arr = np.arange(min_ - interval/2 , max_ + interval,interval)
+            else:
+                interval = (max_ - min_)/(Ncolors)
+                norm_arr = np.arange(min_ , max_ ,interval)
         
         norm_list = list(norm_arr)   
         norm = mpl.colors.BoundaryNorm(norm_list, cmp.N)
@@ -168,7 +181,9 @@ class TB1Img():
         return colorbar, norm
     
     # 矩阵转热力图
-    def mat_to_heatmap(self, input_mat, file_name = "", cmp_name="magma", _show_num = False, center = None, label_row = None, label_col = None,**kwargs):
+    def mat_to_heatmap(self, input_mat, file_name = "", cmp_name="magma",
+                    _show_num = False, center = None,
+                    label_row = None, label_col = None,_isShow = True, **kwargs):
         import numpy as np
         import pandas as pd
         import matplotlib.pyplot as plt
@@ -183,9 +198,7 @@ class TB1Img():
         
         # 翻转纵坐标
         label_row.reverse()
-        
-        
-            
+
         df = pd.DataFrame(np.flip(input_mat,axis=0), index=label_row, columns=label_col)
 
         # 绘制热力图
@@ -208,14 +221,19 @@ class TB1Img():
         if len(file_name):
             save_path = self.get_save_path(file_name = file_name)
             plt.savefig(save_path)
+            
+            # with open(self.get_save_path(file_name = file_name, driver="txt"), 'w') as f:
+            #     for i in range (len (input_mat)): 
+            #         f.write(str(input_mat[i])+'\n')
         
         # 展示热力图
         plt.tight_layout()
-        plt.show()
+        if _isShow:
+            plt.show()
     
     # 矩阵转3D图
     # 参考代码https://blog.csdn.net/qq_40811682/article/details/117027899
-    def mat_to_3D(self, input_mat, img_type, file_name = "", cmp_name="magma"):
+    def mat_to_3D(self, input_mat, img_type, file_name = "", cmp_name="magma", **kwargs):
         from mpl_toolkits.mplot3d import Axes3D
         import matplotlib.pyplot as plt
         from matplotlib.ticker import LinearLocator, FormatStrFormatter
@@ -226,8 +244,8 @@ class TB1Img():
         ax = fig.add_subplot(projection='3d')
         
         # 准备数据
-        X = range(input_mat.shape[0])
-        Y = range(input_mat.shape[1])
+        X = range(input_mat.shape[1])
+        Y = range(input_mat.shape[0])
         X, Y = np.meshgrid(X, Y)
         Z = input_mat
         
@@ -237,13 +255,13 @@ class TB1Img():
             surf = ax.plot_surface(X, Y, Z, cmap=cm.get_cmap(cmp_name),
                                 linewidth=0, antialiased=False)
         elif img_type == "tri-surface":
-            surf = ax.plot_trisurf(np.array(X).flatten(), np.array(Y).flatten(), Z.flatten(), cmap = cm.get_cmap(cmp_name))
+            surf = ax.plot_trisurf(np.array(X).flatten(), np.array(Y).flatten(), np.array(Z).flatten(), cmap = cm.get_cmap(cmp_name))
             
         
         # 定制化坐标系
-        ax.set_zlim(-1.01, 1.01)
-        ax.zaxis.set_major_locator(LinearLocator(10))
-        ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
+        # ax.set_zlim(-1.01, 1.01)
+        # ax.zaxis.set_major_locator(LinearLocator(10))
+        # ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
         
         # 添加颜色条
         fig.colorbar(surf, shrink=0.5, aspect=5)
@@ -260,15 +278,16 @@ class TB1Img():
         return fig
     
     # 落点热力图
-    def drop_heatmap(self, x_arr, y_arr, z_arr, map_size, mode = "mean", num_lim = 1, **kwargs):
+    def drop_map(self, x_arr, y_arr, z_arr, map_size, model = "heatmap", mode = "mean", num_lim = 1, **kwargs):
         import numpy.matlib as nm
-        from theblack1_time_series import TB1TimeSeries
-        TS_TOOL = TB1TimeSeries()
+        # from theblack1_time_series import TB1TimeSeries
+        # TS_TOOL = TB1TimeSeries()
+        from collections import Iterable
         
         # 初始化
         Nx = map_size[0]
         Ny = map_size[1]
-        drop_mat = nm.empty((Ny, Nx))
+        drop_mat = nm.zeros((Ny, Nx))
         
         # 生成查找方格位置
         x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
@@ -281,7 +300,7 @@ class TB1Img():
             # 在x batch 中寻找y batch
             for (y_idx,y_batch_start) in enumerate(np.arange(np.min(y_arr), np.max(y_arr), y_interval)):
                 y_batch_end = y_batch_start + y_interval
-                # 寻找该x batch 中符合条件的x索引
+                # 寻找该y batch 中符合条件的y索引
                 y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
                 
                 x_where_arr = np.array(x_where_res)
@@ -290,24 +309,128 @@ class TB1Img():
                 z_where_arr = x_where_arr[[np.in1d(x_where_arr, y_where_arr)]]
                 
                 # 矩阵数值填充
+                # 模式 1：求均值
                 if mode == "mean":
                     z_mean = 0
                     for z_idx in z_where_arr:
-                        z_mean += z_arr[z_idx]/len(z_where_arr)
+                        if not isinstance(z_arr[z_idx],Iterable):
+                            z_mean += z_arr[z_idx]/len(z_where_arr)
                         
                     drop_mat[y_idx, x_idx] = z_mean
+                
+                # 模式 2：求落点数量
                 elif mode == "times":
                     drop_mat[y_idx, x_idx] = len(z_where_arr)
                 
+                # 模式 3：求落点数值求和
+                elif mode == "sum":
+                    z_total = 0
+                    for z_idx in z_where_arr:
+                        if not isinstance(z_arr[z_idx],Iterable):
+                            z_total += z_arr[z_idx]
+                    drop_mat[y_idx, x_idx] = z_total
+                        
                 # 个数限制
                 if len(z_where_arr) < num_lim:
                     drop_mat[y_idx, x_idx] = 0
         
         # 制作标签
-        label_col = [f"{i:.2f}" for i in np.arange(np.min(x_arr), np.max(x_arr), x_interval)]
-        label_row = [f"{i:.2f}" for i in np.arange(np.min(y_arr), np.max(y_arr), y_interval)]
+        label_col = [f"{i:.4f}" for i in np.arange(np.min(x_arr), np.max(x_arr), x_interval)]
+        label_row = [f"{i:.4f}" for i in np.arange(np.min(y_arr), np.max(y_arr), y_interval)]
         
-        self.mat_to_heatmap(drop_mat, label_col = label_col, label_row = label_row, **kwargs)
+        if model == "heatmap":
+            self.mat_to_heatmap(drop_mat, label_col = label_col, label_row = label_row, **kwargs)
+        elif model == "surface":
+            self.mat_to_3D(drop_mat, img_type="surface", **kwargs)
+        elif model == "tri-surface":
+            self.mat_to_3D(drop_mat, img_type="tri-surface", **kwargs)
+        
+        return drop_mat
+    
+    # 裁剪矩阵为热力图
+    def clip_mat_map(self, x_arr, y_arr, z_mat_arr, map_size, model = "heatmap",
+                           mode = "mean", normalize = "None", **kwargs):
+        from theblack1_time_series import TB1TimeSeries
+        TS_TOOL = TB1TimeSeries()
+        import numpy.matlib as nm
+        from tqdm import tqdm
+        # import time
+        
+        # 初始化
+        Nx = map_size[0]
+        Ny = map_size[1]
+        clip_mat = nm.zeros((Ny, Nx))
+        
+        # 生成查找方格位置
+        x_interval = (np.max(x_arr) - np.min(x_arr))/Nx
+        y_interval = (np.max(y_arr) - np.min(y_arr))/Ny
+        # 进入x batch
+        for (x_idx,x_batch_start) in tqdm(enumerate(np.arange(np.min(x_arr), np.max(x_arr), x_interval))):
+            x_batch_end = x_batch_start + x_interval
+            # 寻找该x batch 中符合条件的x索引
+            x_where_res = np.where(np.logical_and(np.logical_or(x_arr > x_batch_start, x_arr == x_batch_start), x_arr < x_batch_end))
+            # 如果为0，跳过
+            # 在x batch 中寻找y batch
+            for (y_idx,y_batch_start) in enumerate(np.arange(np.min(y_arr), np.max(y_arr), y_interval)):
+                y_batch_end = y_batch_start + y_interval
+                # 寻找该y batch 中符合条件的y索引
+                y_where_res = np.where(np.logical_and(np.logical_or(y_arr > y_batch_start, y_arr == y_batch_start), y_arr < y_batch_end))
+                
+                x_where_arr = np.array(x_where_res)
+                y_where_arr = np.array(y_where_res)
+                
+                # 逐个遍历索引交集
+                for x_where_idx in x_where_arr[0]:
+                    for y_where_idx in y_where_arr[0]:
+                        z_val = z_mat_arr[x_where_idx][y_where_idx]
+                        # 矩阵数值填充
+                        # 模式 1：求均值
+                        if mode == "mean":
+                            z_mean = z_val/(len(x_where_arr[0]) * len(y_where_arr[0]))
+                            clip_mat[y_idx, x_idx] += z_mean
+            
+                        # 模式 2：求落点数值求和
+                        elif mode == "sum":
+                            clip_mat[y_idx, x_idx] += z_val
+                            
+                            
+        # 进行标准化
+        if normalize == "x":
+            for x_idx in range(Nx):
+                # x 逐个标准化
+                val_by_x = clip_mat[::,x_idx]
+                val_by_x_norm = TS_TOOL.min_max_normalize(val_by_x, 0, 1)
+                
+                #写入数据
+                clip_mat[::,x_idx]= val_by_x_norm
+        elif normalize == "y":
+            for y_idx in range(Ny):
+                # y 逐个标准化
+                val_by_y = clip_mat[y_idx, ::]
+                val_by_y_norm = TS_TOOL.min_max_normalize(val_by_y, 0, 1)
+                
+                #写入数据
+                clip_mat[y_idx, ::] = val_by_y_norm
+        
+        # 制作标签
+        if Nx == len(x_arr):
+            label_col = list(x_arr)
+        else:
+            label_col = [f"{i:.2f}" for i in np.arange(np.min(x_arr), np.max(x_arr), x_interval)]
+        
+        if Ny == len(y_arr):
+            label_row = list(y_arr)
+        else:
+            label_row = [f"{i:.2f}" for i in np.arange(np.min(y_arr), np.max(y_arr), y_interval)]
+        
+        if model == "heatmap":
+            self.mat_to_heatmap(clip_mat, label_col = label_col, label_row = label_row, **kwargs)
+        elif model == "surface":
+            self.mat_to_3D(clip_mat, img_type="surface", **kwargs)
+        elif model == "tri-surface":
+            self.mat_to_3D(clip_mat, img_type="tri-surface", **kwargs)
+        
+        return clip_mat
                 
     # 二维数组化一维数组处理并还原
     # #(部分与二维无关的数据处理（如缠绕），可以这样处理来提高运算速度)
@@ -387,6 +510,57 @@ class TB1Img():
 
         
         return res_list, center_idxs_list
+
+    # 曲线拟合
+    def curve_fitting(self, x,y,deg = 1, _isSave = True, _isShow = True, figsize = (14,7),
+                    file_name = "curve_fitting", fig = None, _example = False):
+        # 是否展示案例？
+        if _example:
+            x = np.arange(-1, 1, 0.02)
+            y = 2 * np.sin(x * 2.3) + np.random.rand(len(x))
+            deg = 3
+            _isSave = False
+            _isShow = True
+            figsize = (14,7)
+            fig = None
+            file_name = "example_curve_fitting"
+            
+        parameter = np.polyfit(x, y, deg)    #拟合deg次多项式
+        p = np.poly1d(parameter)             #拟合deg次多项式
+        aa=''                               
+        for i in range(deg+1): 
+            bb=parameter[i]
+            str_bb = '{:.2e}'.format(bb)
+            if bb>0:
+                if i==0:
+                    bb=str_bb
+                else:
+                    bb='+'+str_bb
+            else:
+                bb=str_bb
+            if deg==i:
+                aa=aa+bb
+            else:
+                aa=aa+bb+'x^'+str(deg-i)    
+        
+        if not fig:
+            fig = plt.figure(figsize=figsize)   
+            plt.scatter(x, y, label = aa)     #原始数据散点图
+            plt.plot(x, p(x), color='g', label = round(np.corrcoef(y, p(x))[0,1]**2,2))  # 画拟合曲线
+        else:
+            plt.plot(x, p(x), color='g', label = f"fitting line:{aa}\nr = {round(np.corrcoef(y, p(x))[0,1]**2,2)}")  # 画拟合曲线
+        
+        plt.legend()
+        plt.tight_layout()
+        
+        if _isSave:
+            plt.savefig(self.get_save_path(file_name))
+            print("成功保存为:" + self.get_save_path(file_name))
+            
+        if _isShow:
+            plt.show()
+        else:
+            return fig
 
 class _TB1CvImshow():
     # 创建类，自动处理并显示

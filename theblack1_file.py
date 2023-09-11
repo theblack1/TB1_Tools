@@ -29,10 +29,11 @@ class TB1Flie():
     # "_read_by_cols"表示读取结果按照每个列保存为数组
     def read_by_line(self, str_file_path, split_str = "", start_idx = 1, _read_by_cols = False):
         file_list = []
-        __is_read_start = False
+        
         with open(str_file_path, "r" ,encoding=self.check_charset(str_file_path)) as str_file:
             # 读取第一行
             line = str_file.readline()
+            line = line.replace("\n", "")
             line_idx = 1
             #　如果逐行读取，初始化数组
             if _read_by_cols and split_str:
@@ -48,7 +49,7 @@ class TB1Flie():
                     
             # 逐行读取
             while line:
-                if __is_read_start:
+                if line_idx>=start_idx:
                     # 是否分割
                     if split_str == -1:
                         line_data = line.split()
@@ -64,13 +65,10 @@ class TB1Flie():
                             file_list[col_idx].append(line_data[col_idx])
                     else:
                         file_list.append(line_data) # 列表增加
-                else:
-                    # 是否读取到指定行
-                    if line_idx == start_idx:
-                        __is_read_start = True
                 
                 # 读下一行
                 line = str_file.readline() # 读取下一行
+                line = line.replace("\n", "")
                 line_idx += 1
         
         file_arr = np.array(file_list)
